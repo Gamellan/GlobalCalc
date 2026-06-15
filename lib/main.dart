@@ -1,57 +1,168 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
+import 'l10n/app_texts.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await MobileAds.instance.initialize();
   runApp(const GlobalCalcApp());
 }
 
-class GlobalCalcApp extends StatelessWidget {
+class GlobalCalcApp extends StatefulWidget {
   const GlobalCalcApp({super.key});
+
+  @override
+  State<GlobalCalcApp> createState() => _GlobalCalcAppState();
+}
+
+class _GlobalCalcAppState extends State<GlobalCalcApp> {
+  Locale _locale = const Locale('en');
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'GlobalCalc',
       debugShowCheckedModeBanner: false,
+      locale: _locale,
+      supportedLocales: AppTexts.supportedLocales,
+      localizationsDelegates: const [
+        AppTexts.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0A84FF)),
         useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0A84FF)),
+        scaffoldBackgroundColor: const Color(0xFFF4F7FF),
+        cardTheme: CardThemeData(
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
       ),
-      home: const GlobalCalcHomePage(),
+      home: GlobalCalcHomePage(
+        locale: _locale,
+        onLocaleChanged: (locale) => setState(() => _locale = locale),
+      ),
     );
   }
 }
 
-class GlobalCalcHomePage extends StatelessWidget {
-  const GlobalCalcHomePage({super.key});
+class GlobalCalcHomePage extends StatefulWidget {
+  const GlobalCalcHomePage({
+    super.key,
+    required this.locale,
+    required this.onLocaleChanged,
+  });
+
+  final Locale locale;
+  final ValueChanged<Locale> onLocaleChanged;
+
+  @override
+  State<GlobalCalcHomePage> createState() => _GlobalCalcHomePageState();
+}
+
+class _GlobalCalcHomePageState extends State<GlobalCalcHomePage> {
+  BannerAd? _bannerAd;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBanner();
+  }
+
+  void _loadBanner() {
+    final banner = BannerAd(
+      adUnitId: AdMobConfig.bannerAdUnitId,
+      request: const AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (_) => setState(() {}),
+      ),
+    );
+
+    banner.load();
+    _bannerAd = banner;
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTexts.of(context);
+
     return DefaultTabController(
       length: 4,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('GlobalCalc'),
-          bottom: const TabBar(
+          title: Text(t.t('appName')),
+          actions: [
+            PopupMenuButton<Locale>(
+              tooltip: t.t('language'),
+              icon: const Icon(Icons.language),
+              onSelected: widget.onLocaleChanged,
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: Locale('en'), child: Text('English')),
+                PopupMenuItem(value: Locale('es'), child: Text('Espanol')),
+                PopupMenuItem(value: Locale('pt'), child: Text('Portugues')),
+                PopupMenuItem(value: Locale('fr'), child: Text('Francais')),
+              ],
+            ),
+          ],
+          bottom: TabBar(
             isScrollable: true,
             tabs: [
-              Tab(icon: Icon(Icons.restaurant), text: 'Tips'),
-              Tab(icon: Icon(Icons.currency_exchange), text: 'Currency'),
-              Tab(icon: Icon(Icons.local_offer), text: 'Discount'),
-              Tab(icon: Icon(Icons.percent), text: 'Percentages'),
+              Tab(icon: const Icon(Icons.restaurant), text: t.t('tips')),
+              Tab(icon: const Icon(Icons.currency_exchange), text: t.t('currency')),
+              Tab(icon: const Icon(Icons.local_offer), text: t.t('discount')),
+              Tab(icon: const Icon(Icons.percent), text: t.t('percentages')),
             ],
           ),
         ),
-        body: const TabBarView(
-          children: [
-            TipCalculatorTab(),
-            CurrencyConverterTab(),
-            DiscountCalculatorTab(),
-            PercentageCalculatorTab(),
-          ],
+        body: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFEAF2FF), Color(0xFFF9FBFF)],
+            ),
+          ),
+          child: TabBarView(
+            children: [
+              const TipCalculatorTab(),
+              CurrencyConverterTab(onConversionCompleted: AdController.onConversionCompleted),
+              const DiscountCalculatorTab(),
+              const PercentageCalculatorTab(),
+            ],
+          ),
         ),
+        bottomNavigationBar: _bannerAd == null
+            ? null
+            : SafeArea(
+                child: SizedBox(
+                  height: _bannerAd!.size.height.toDouble(),
+                  child: AdWidget(ad: _bannerAd!),
+                ),
+              ),
       ),
     );
   }
@@ -80,6 +191,7 @@ class _TipCalculatorTabState extends State<TipCalculatorTab> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTexts.of(context);
     final bill = _toDouble(_billController.text);
     final split = _toDouble(_splitController.text).clamp(1, 9999);
     final tipAmount = bill * (_tipPercent / 100);
@@ -93,11 +205,11 @@ class _TipCalculatorTabState extends State<TipCalculatorTab> {
           TextField(
             controller: _billController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Bill amount'),
+            decoration: InputDecoration(labelText: t.t('billAmount')),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
-          Text('Tip: ${_tipPercent.toStringAsFixed(0)}%'),
+          Text('${t.t('tip')}: ${_tipPercent.toStringAsFixed(0)}%'),
           Slider(
             value: _tipPercent,
             min: 0,
@@ -109,13 +221,13 @@ class _TipCalculatorTabState extends State<TipCalculatorTab> {
           TextField(
             controller: _splitController,
             keyboardType: const TextInputType.numberWithOptions(decimal: false),
-            decoration: const InputDecoration(labelText: 'Split by people'),
+            decoration: InputDecoration(labelText: t.t('splitByPeople')),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 24),
-          _ResultLine(label: 'Tip amount', value: tipAmount),
-          _ResultLine(label: 'Total with tip', value: total),
-          _ResultLine(label: 'Per person', value: perPerson),
+          _ResultLine(label: t.t('tipAmount'), value: tipAmount),
+          _ResultLine(label: t.t('totalWithTip'), value: total),
+          _ResultLine(label: t.t('perPerson'), value: perPerson),
         ],
       ),
     );
@@ -123,7 +235,9 @@ class _TipCalculatorTabState extends State<TipCalculatorTab> {
 }
 
 class CurrencyConverterTab extends StatefulWidget {
-  const CurrencyConverterTab({super.key});
+  const CurrencyConverterTab({super.key, required this.onConversionCompleted});
+
+  final VoidCallback onConversionCompleted;
 
   @override
   State<CurrencyConverterTab> createState() => _CurrencyConverterTabState();
@@ -147,8 +261,7 @@ class _CurrencyConverterTabState extends State<CurrencyConverterTab> {
   String _from = 'USD';
   String _to = 'EUR';
   bool _loading = false;
-  double? _converted;
-  double? _rate;
+  CurrencyConversion? _conversion;
   String? _error;
 
   @override
@@ -167,12 +280,12 @@ class _CurrencyConverterTabState extends State<CurrencyConverterTab> {
     try {
       final result = await CurrencyService.convert(amount: amount, from: _from, to: _to);
       setState(() {
-        _converted = result.converted;
-        _rate = result.rate;
+        _conversion = result;
       });
-    } catch (e) {
+      widget.onConversionCompleted();
+    } catch (_) {
       setState(() {
-        _error = 'Could not fetch exchange rate. Check connection and try again.';
+        _error = AppTexts.of(context).t('exchangeError');
       });
     } finally {
       setState(() {
@@ -183,6 +296,8 @@ class _CurrencyConverterTabState extends State<CurrencyConverterTab> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTexts.of(context);
+
     return _CalculatorContainer(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,7 +305,7 @@ class _CurrencyConverterTabState extends State<CurrencyConverterTab> {
           TextField(
             controller: _amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Amount'),
+            decoration: InputDecoration(labelText: t.t('amount')),
           ),
           const SizedBox(height: 12),
           Row(
@@ -198,7 +313,7 @@ class _CurrencyConverterTabState extends State<CurrencyConverterTab> {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   initialValue: _from,
-                  decoration: const InputDecoration(labelText: 'From'),
+                  decoration: InputDecoration(labelText: t.t('from')),
                   items: _currencies
                       .map((currency) => DropdownMenuItem(
                             value: currency,
@@ -212,7 +327,7 @@ class _CurrencyConverterTabState extends State<CurrencyConverterTab> {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   initialValue: _to,
-                  decoration: const InputDecoration(labelText: 'To'),
+                  decoration: InputDecoration(labelText: t.t('to')),
                   items: _currencies
                       .map((currency) => DropdownMenuItem(
                             value: currency,
@@ -234,16 +349,28 @@ class _CurrencyConverterTabState extends State<CurrencyConverterTab> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.currency_exchange),
-            label: const Text('Convert now'),
+            label: Text(t.t('convertNow')),
           ),
           const SizedBox(height: 20),
-          if (_converted != null)
+          if (_conversion != null)
             Text(
-              '${_amountController.text} $_from = ${_converted!.toStringAsFixed(4)} $_to',
+              '${_amountController.text} $_from = ${_conversion!.converted.toStringAsFixed(4)} $_to',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-          if (_rate != null)
-            Text('1 $_from = ${_rate!.toStringAsFixed(6)} $_to'),
+          if (_conversion != null)
+            Text(
+              '${t.t('rateLabel')}: 1 $_from = ${_conversion!.rate.toStringAsFixed(6)} $_to',
+            ),
+          if (_conversion != null && _conversion!.source == RateSource.cached)
+            Text(
+              t.t('offlineRateNotice'),
+              style: const TextStyle(color: Color(0xFF8A5C00)),
+            ),
+          if (_conversion != null)
+            Text(
+              _conversion!.source == RateSource.live ? t.t('liveRate') : t.t('cachedRate'),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           if (_error != null)
             Text(
               _error!,
@@ -251,7 +378,7 @@ class _CurrencyConverterTabState extends State<CurrencyConverterTab> {
             ),
           const Spacer(),
           Text(
-            'No backend needed: rates fetched directly from Frankfurter API.',
+            t.t('noBackendNotice'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
@@ -279,6 +406,7 @@ class _DiscountCalculatorTabState extends State<DiscountCalculatorTab> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTexts.of(context);
     final original = _toDouble(_priceController.text);
     final saved = original * (_discountPercent / 100);
     final finalPrice = original - saved;
@@ -290,11 +418,11 @@ class _DiscountCalculatorTabState extends State<DiscountCalculatorTab> {
           TextField(
             controller: _priceController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Original price'),
+            decoration: InputDecoration(labelText: t.t('originalPrice')),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
-          Text('Discount: ${_discountPercent.toStringAsFixed(0)}%'),
+          Text('${t.t('discountValue')}: ${_discountPercent.toStringAsFixed(0)}%'),
           Slider(
             value: _discountPercent,
             min: 0,
@@ -304,8 +432,8 @@ class _DiscountCalculatorTabState extends State<DiscountCalculatorTab> {
             onChanged: (value) => setState(() => _discountPercent = value),
           ),
           const SizedBox(height: 24),
-          _ResultLine(label: 'You save', value: saved),
-          _ResultLine(label: 'Final price', value: finalPrice),
+          _ResultLine(label: t.t('youSave'), value: saved),
+          _ResultLine(label: t.t('finalPrice'), value: finalPrice),
         ],
       ),
     );
@@ -336,6 +464,7 @@ class _PercentageCalculatorTabState extends State<PercentageCalculatorTab> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTexts.of(context);
     final number = _toDouble(_numberController.text);
     final percent = _toDouble(_percentController.text);
     final part = _toDouble(_partController.text);
@@ -346,37 +475,37 @@ class _PercentageCalculatorTabState extends State<PercentageCalculatorTab> {
     return _CalculatorContainer(
       child: ListView(
         children: [
-          Text('A) What is X% of N?', style: Theme.of(context).textTheme.titleSmall),
+          Text(t.t('whatIsPercentOf'), style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           TextField(
             controller: _numberController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'N (number)'),
+            decoration: InputDecoration(labelText: t.t('numberN')),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _percentController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'X (percent)'),
+            decoration: InputDecoration(labelText: t.t('percentX')),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
-          _ResultLine(label: 'Result', value: percentOfNumber),
+          _ResultLine(label: t.t('result'), value: percentOfNumber),
           const SizedBox(height: 24),
-          Text('B) Part is what % of whole?', style: Theme.of(context).textTheme.titleSmall),
+          Text(t.t('partOfWhole'), style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           TextField(
             controller: _partController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Part'),
+            decoration: InputDecoration(labelText: t.t('part')),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _wholeController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Whole'),
+            decoration: InputDecoration(labelText: t.t('whole')),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
@@ -427,6 +556,20 @@ class _CalculatorContainer extends StatelessWidget {
   }
 }
 
+enum RateSource { live, cached }
+
+class CurrencyConversion {
+  CurrencyConversion({
+    required this.converted,
+    required this.rate,
+    required this.source,
+  });
+
+  final double converted;
+  final double rate;
+  final RateSource source;
+}
+
 class CurrencyService {
   static Future<CurrencyConversion> convert({
     required double amount,
@@ -434,30 +577,78 @@ class CurrencyService {
     required String to,
   }) async {
     if (from == to) {
-      return CurrencyConversion(converted: amount, rate: 1);
+      return CurrencyConversion(converted: amount, rate: 1, source: RateSource.live);
     }
 
-    final uri = Uri.parse(
-      'https://api.frankfurter.app/latest?amount=$amount&from=$from&to=$to',
-    );
-    final response = await http.get(uri);
+    final cacheKey = 'rate_${from}_$to';
+    final prefs = await SharedPreferences.getInstance();
 
-    if (response.statusCode != 200) {
-      throw Exception('Request failed with status ${response.statusCode}');
+    try {
+      final uri = Uri.parse('https://api.frankfurter.app/latest?amount=1&from=$from&to=$to');
+      final response = await http.get(uri);
+
+      if (response.statusCode != 200) {
+        throw Exception('Request failed with status ${response.statusCode}');
+      }
+
+      final map = jsonDecode(response.body) as Map<String, dynamic>;
+      final rates = map['rates'] as Map<String, dynamic>;
+      final rate = (rates[to] as num).toDouble();
+
+      await prefs.setDouble(cacheKey, rate);
+      await prefs.setInt('${cacheKey}_ts', DateTime.now().millisecondsSinceEpoch);
+
+      return CurrencyConversion(
+        converted: amount * rate,
+        rate: rate,
+        source: RateSource.live,
+      );
+    } catch (_) {
+      final cachedRate = prefs.getDouble(cacheKey);
+      if (cachedRate == null) {
+        rethrow;
+      }
+
+      return CurrencyConversion(
+        converted: amount * cachedRate,
+        rate: cachedRate,
+        source: RateSource.cached,
+      );
     }
-
-    final map = jsonDecode(response.body) as Map<String, dynamic>;
-    final rates = map['rates'] as Map<String, dynamic>;
-    final converted = (rates[to] as num).toDouble();
-    final double rate = amount == 0 ? 0.0 : converted / amount;
-
-    return CurrencyConversion(converted: converted, rate: rate);
   }
 }
 
-class CurrencyConversion {
-  CurrencyConversion({required this.converted, required this.rate});
+class AdMobConfig {
+  AdMobConfig._();
 
-  final double converted;
-  final double rate;
+  // Test IDs. Replace with production IDs before release.
+  static const String appId = 'ca-app-pub-3940256099942544~3347511713';
+  static const String bannerAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
+  static const String interstitialAdUnitId = 'ca-app-pub-3940256099942544/1033173712';
+}
+
+class AdController {
+  static int _conversionCount = 0;
+  static InterstitialAd? _interstitial;
+
+  static void _loadInterstitial() {
+    InterstitialAd.load(
+      adUnitId: AdMobConfig.interstitialAdUnitId,
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) => _interstitial = ad,
+        onAdFailedToLoad: (_) => _interstitial = null,
+      ),
+    );
+  }
+
+  static void onConversionCompleted() {
+    _conversionCount++;
+    _loadInterstitial();
+
+    if (_conversionCount % 3 == 0 && _interstitial != null) {
+      _interstitial!.show();
+      _interstitial = null;
+    }
+  }
 }

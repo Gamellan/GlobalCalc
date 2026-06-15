@@ -12,6 +12,7 @@ import 'package:global_calc/main.dart';
 void main() {
   testWidgets('Renders GlobalCalc tabs', (WidgetTester tester) async {
     await tester.pumpWidget(const GlobalCalcApp());
+    await tester.pumpAndSettle();
 
     expect(find.text('GlobalCalc'), findsOneWidget);
     expect(find.text('Tips'), findsOneWidget);
