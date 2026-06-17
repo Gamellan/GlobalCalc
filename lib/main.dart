@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -10,8 +11,14 @@ import 'l10n/app_texts.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await MobileAds.instance.initialize();
+  unawaited(_initializeAdsSafely());
   runApp(const GlobalCalcApp());
+}
+
+Future<void> _initializeAdsSafely() async {
+  try {
+    await MobileAds.instance.initialize();
+  } catch (_) {}
 }
 
 class GlobalCalcApp extends StatefulWidget {
