@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ad-services-config>
+    <attribution enabled="false"/>
+    <topics enabled="false" />
+    <custom-audiences enabled="false" />
+    <protected-app-signals enabled="false" />
+    <ad-id accessAllowed="false" />
+    <app-set-id accessAllowed="false" />
+</ad-services-config>
